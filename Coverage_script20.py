@@ -313,7 +313,7 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
                 try:
                     print(f"{cpID}:Count of tests in queue = {len(managedTestList)}")
                     print(f"{cpID}:RUNNING PipeUVM Testbench")
-                    os.chdir(axeFileResolverPath)
+                    #os.chdir(axeFileResolverPath)
                     print("CURRENT DIRECTORY : " + str(os.getcwd()))
 
                     #os.system('mkdir ' + workingDir_actualName + "\\" + test + "_FD2D")
@@ -325,7 +325,7 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
                     #' -config ' + projectName + 'Test '
 
                 ##################################################################### PIPE UVM EXECUTION ##############################################################################
-                    runTestCmd = fblockTestbenchPath + " -tname " + test + " -tdir " + workingDir_actualName + " -ftype display -dunit full_pipe" + " -fulsim_release_path " + softwarePath + " -device" + device_option +" -bdsm_base bc000000 -flatccsbase 84000b7600001 -dcalllog enable"
+                    runTestCmd = fblockTestbenchPath + " -tname " + test + " -tdir " + workingDir_actualName+ "\\" + " -ftype display -dunit crc" + " -fulsim_release_path " + softwarePath + " -device" + device_option +" -bdsm_base bc000000 -flat_ccs_base 84000b7600001 -dcalllog enable"
 
                     print("COMMAND : " + runTestCmd)
                     testStartTime = time.time()
@@ -440,20 +440,20 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
         covFileDictionary[covFile] = False                
         return
 
-def parse_result(test ,workingDir_actualName):
-    result_json = workingDir_actualName + "/result.DisplayUvmTestBench.json"
-    if result_json.exists():
+def parse_result(test, workingDir_actualName):
+    result_json = workingDir_actualName + "\\result.DisplayUvmTestBench.json"
+    if os.path.exists(result_json):  # Use os.path.exists() for strings
         with open(result_json, "r") as f:
             data = json.load(f)
             result = data.get("Result", {})
             exit_code = result.get("ToolExitCode")
             if exit_code == "0":
-                print(f"{test} \n---TEST EXECUTION SUCCESSFUL---\n")
+                print(f"{test} : -----------------TEST EXECUTION SUCCESSFUL------------\n")
             else:
-                print(f"{test} \n---TEST EXECUTION FAILED---\n")
+                print(f"{test} : !!!!!!!!!!!!!!! TEST EXECUTION FAILED !!!!!!!!!!!!!!!!!!!!\n")
     else:
         exit_code = "-1"
-        print(f"{test} \n---JSON FILE MISSING---\n")
+        print(f"{test} : !!!!!!!!!!!!!!! JSON FILE MISSING !!!!!!!!!!!!!!! \n")
 
 def scheduler(device):
     if device != "":
