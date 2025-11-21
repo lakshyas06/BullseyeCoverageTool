@@ -2,6 +2,7 @@
 COVBR_ON = False
 source_code_directory = 'ip_display\\display13\\Display\\src'
 covbrResults_folderName_in_setupDir = "covbrResults"
+failedTests = 0
 #####################################################
 #TODO: make dataframe to perform one write at end of the thread along with one zero coverage covbr too at the end
 
@@ -32,8 +33,17 @@ import datetime
 import re
 import pandas as pd
 #formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-def setup_logger(name, log_file, level=logging.INFO):
-    handler = logging.FileHandler(log_file)        
+
+
+def setup_logger(name, log_file, log_dir=None, level=logging.INFO):
+    # Create full path if directory is specified
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)  # Create directory if it doesn't exist
+        full_log_path = os.path.join(log_dir, log_file)
+    else:
+        full_log_path = log_file
+
+    handler = logging.FileHandler(full_log_path)
     #handler.setFormatter(formatter)
 
     logger = logging.getLogger(name)
@@ -41,15 +51,23 @@ def setup_logger(name, log_file, level=logging.INFO):
     logger.addHandler(handler)
 
     return logger
-projectName = "other"
-#file loggers
-log_Start_End_of_tests = setup_logger('Start_End_of_tests', 'Start_End_of_tests.csv')
-Failing_tests_list = setup_logger('Failing_tests', 'Failing_tests.txt')
-Passing_tests_list = setup_logger('Passing_tests', 'Passing_tests.txt')
-log_Passing_tests = setup_logger('Passing_tests_log', 'Passing_tests.log')
-Exception_tests_list = setup_logger('Exception_tests', 'Exception_tests.txt')
-Timeout_tests_list = setup_logger('Timeout_tests', 'Timeout_tests.txt')
-log_Exceptions= setup_logger('Exceptions', 'Exceptions.log')
+
+# More flexible path construction
+setupDir = r"D:\Lakshya\Display_Bullseye_Package3"
+projectName = "XE4_V2"
+log_directory = os.path.join(setupDir, projectName, "GoldenCoverageWorkingDir")
+
+print(f"Logs will be saved to: {log_directory}")
+
+# File loggers with directory
+log_Start_End_of_tests = setup_logger('Start_End_of_tests', 'Start_End_of_tests.csv', log_directory)
+Failing_tests_list = setup_logger('Failing_tests', 'Failing_tests.txt', log_directory)
+Passing_tests_list = setup_logger('Passing_tests', 'Passing_tests.txt', log_directory)
+log_Passing_tests = setup_logger('Passing_tests_log', 'Passing_tests.log', log_directory)
+log_Failing_tests = setup_logger('Failing_tests_log', 'Failing_tests.log', log_directory)
+Exception_tests_list = setup_logger('Exception_tests', 'Exception_tests.txt', log_directory)
+Timeout_tests_list = setup_logger('Timeout_tests', 'Timeout_tests.txt', log_directory)
+log_Exceptions = setup_logger('Exceptions', 'Exceptions.log', log_directory)
     
 def run_covbr(src, dst, new_extension, covfile):
     dst_file = os.path.basename(src) + new_extension  
@@ -169,9 +187,9 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
             try:
                 managedTestList.remove(one_test)
             except Exception as e:
-                #cpID = str(os.getpid())
-                #print(f"{cpID}:!!!!!!!!!!!!!!!!!!!!!!!!EXCEPTION_HANDLING_FAILED OCCURED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" + str(e))       
-                #log_Exceptions.info(f"\n---EXCEPTION_HANDLING_FAILED {cpID}:run_one_unit_process---\n" + str(e))              
+                cpID = str(os.getpid())
+                print(f"{cpID}:!!!!!!!!!!!!!!!!!!!!!!!!EXCEPTION_HANDLING_FAILED OCCURED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" + str(e))
+                log_Exceptions.info(f"\n---EXCEPTION_HANDLING_FAILED {cpID}:run_one_unit_process---\n" + str(e))
                 return
             covFileDictionary[covFile] = True
             cpID = str(os.getpid()) # Child process ID
@@ -218,20 +236,22 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
             
             ################################################################################################################
             
-            try:  
-                FirstCopyOfworkingDir = setupDir + "\\WorkingDirs\\workingDir_Copy0"
+            try:
                 workingDir = setupDir + "\\WorkingDirs\\workingDir_"+thread_file_prefix 
                 if (os.path.exists(workingDir_actualName)):
                     os.system(f'RD /S/Q {workingDir_actualName}')               
                 if (os.path.exists(workingDir)):
                     os.rename(workingDir,workingDir_actualName)
                 else:
-                    shutil.copytree(FirstCopyOfworkingDir, workingDir_actualName)
+                    os.mkdir(workingDir_actualName)
+                    #shutil.copytree(FirstCopyOfworkingDir, workingDir_actualName)
                 os.chdir(workingDir_actualName)
+                #################### Resetting COVFILE env variable #############################
                 destCov = (setupDir + "\\GoldenCoverageWorkingDir\\" + covFile)
                 os.environ['COVFILE'] = destCov
                 file_object=None
-                file_object = open(destCov, 'a', 8)    
+                file_object = open(destCov, 'a', 8)
+                ################################################################################
             except Exception as e:
                 os.chdir(setupDir)
                 print(f"{cpID}:!!!!!!!!!!!!!!!!!!!!!!!!SETUP EXCEPTION OCCURED!!!!!!!!!!!!!!!" + str(e))                  
@@ -253,17 +273,16 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
                     unit = unit.replace('"', '')
                     unitsBasicDirectory = localP4VTestPath + unit + "\\basic\\"
                     unitsGoldDirectory  = localP4VTestPath + unit + "\\gold\\"
+                    dispToolsPath = localP4VTestPath + "DISP_tools\\dpi_exclude\\"
                     testBasicPath = unitsBasicDirectory + test + '\\'
                     testGoldPath = unitsGoldDirectory + test + '\\'
-                    gold_folder_name = '__' + projectName +'.-.--'
-                    if (gold_folder_name == "__XE3P_V2.-.--"):
-                        device_name = re.search(r"/(.*?)(?=\.)",device_option).group(1)
-                        #device_name = "xe3pLPG"
-                        gold_folder_name = f'__{device_name}.-.--'
-                    elif(gold_folder_name == "__XE4_V2.-.--"):
-                        gold_folder_name = f'__xe4lpg.-.--'
+                    if(projectName == "XE4_V2"):
+                        Dumpdir = f'__xe4lpg.-.--'
+                    else:
+                        print("!!!!!!!!!!!!!!!!!!! Incorrect Project !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
-                    thisTestGoldPath = testGoldPath + gold_folder_name
+                    thisTestGoldPath = testGoldPath + Dumpdir
+                    dpiExcludePath = dispToolsPath + Dumpdir
                     gold_folder_path = os.path.join(workingDir_actualName, "gold")
                     cpPassLogs = ""  # child process pass logs
                     cpFailLogs = ""  # child process fail logs
@@ -283,18 +302,15 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
                     if not os.path.isdir(testBasicPath):
                         os.chdir('..')
                         os.rename(workingDir_actualName,workingDir)
-                        raise Exception("Sorry, this tests dosent exists in the local Repo")
-
-                    #os.system('copy ' + testBasicPath + '\\* ' + workingDir_actualName)
-                    #os.system('copy ' + testBasicPath+"\\"+test + '.gsf ' + workingDir_actualName)
-                    #os.system('copy ' + testBasicPath+"\\"+test + '.cfg ' + workingDir_actualName)
-                    #os.system('copy ' + testBasicPath+"\\"+test + '.meta.yaml ' + workingDir_actualName)
-
+                        raise Exception("Sorry, this tests dosen't exists in the local Repo")
+                ############################################ Copy Test Files from Perforce to Working Directory ##########################################
                     try:
                         shutil.copytree(testBasicPath, workingDir_actualName, dirs_exist_ok=True)
                         print(f"Directory '{testBasicPath}' copied to '{workingDir_actualName}' (overwriting if necessary).")
                         shutil.copytree(thisTestGoldPath, gold_folder_path, dirs_exist_ok=True)
                         print(f"Directory '{thisTestGoldPath}' copied to '{gold_folder_path}' (overwriting if necessary).")
+                        shutil.copytree(dpiExcludePath, workingDir_actualName, dirs_exist_ok=True)
+                        print(f"Directory '{dpiExcludePath}' copied to '{workingDir_actualName}' (overwriting if necessary).")
                     except shutil.Error as e:
                         print(f"Error during copytree: {e}")
 
@@ -307,22 +323,11 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
                     covFileDictionary[covFile] = False                
                     return
 
-                ###################################################################################################
-                #runTestLog = workingDir_actualName + "\\" + test + '_ExecLog.log'
                 #######################################################################################################################
                 try:
                     print(f"{cpID}:Count of tests in queue = {len(managedTestList)}")
                     print(f"{cpID}:RUNNING PipeUVM Testbench")
-                    #os.chdir(axeFileResolverPath)
                     print("CURRENT DIRECTORY : " + str(os.getcwd()))
-
-                    #os.system('mkdir ' + workingDir_actualName + "\\" + test + "_FD2D")
-                    #runTestCmd = 'perl runtest7.pl -testname ' + test + ' -unit ' + unit + '/basic/' + test + ' -config ' + configopt + ' ' +\
-                     #            '-grits_opt=\"' + grits_option + '\" ' + '-fulsim_opt=\"' + fulsim_option + '\" ' + \
-                     #            '-device=\"' + device_option + '\" ' + ' -bindir ' + axeFileResolverPath + ' -exedir ' + \
-                      #           softwarePath + ' -covfile ' + destCov + ' -testdir ' + workingDir_actualName + ' -golddir gold -nogold -nopost -resultroot ' + \
-                       #          workingDir_actualName + ' > ' + runTestLog
-                    #' -config ' + projectName + 'Test '
 
                 ##################################################################### PIPE UVM EXECUTION ##############################################################################
                     runTestCmd = fblockTestbenchPath + " -tname " + test + " -tdir " + workingDir_actualName+ "\\" + " -ftype display -dunit crc" + " -fulsim_release_path " + softwarePath + " -device" + device_option +" -bdsm_base bc000000 -flat_ccs_base 84000b7600001 -dcalllog enable"
@@ -363,49 +368,37 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
                     print(f"{cpID}:TEST TIME : {testDuration_str}")
                     print(f"{cpID}:FINSIHED TB EXECUTION")
                     os.chdir(setupDir)
+
                     ###################################### CHECK TEST STATUS ##############################################
-                    parse_result(test, workingDir_actualName)
-                    fd2dDir = workingDir_actualName + "\\fd2d"
-                    #if ((os.path.isfile(testGoldPathTkn) == False) or (os.path.isdir(fd2dDir) and len(os.listdir(fd2dDir)) > 0)):
-                    if ((os.path.isdir(thisTestGoldPath) and len(os.listdir(thisTestGoldPath)) > 0) and not (os.path.isdir(fd2dDir) and len(os.listdir(fd2dDir)) > 0)):
-                        if (working_directory_for_failed_tests_not_required):                       
-                            try:
-                                os.rename(workingDir_actualName,workingDir)
-                            except Exception as e:
-                                print("!!!!!!!!!!!!!!!!!!!!!!!!WD_RENAME_BACK EXCEPTION OCCURED!!!!!!!!!!!!!!!" + str(e))
-                                log_Exceptions.info(f"\n---WD_RENAME_BACK_EXCEPTION_PID {cpID}:run_one_unit_process---\n{unit}\\{test}\n" + str(e)) 
-                                try:
-                                    shutil.rmtree(workingDir_actualName)
-                                except Exception as e:
-                                    log_Exceptions.info(f"\n---WD_RMTREE_EXCEPTION_PID {cpID}:run_one_unit_process---\n{unit}\\{test}\n" + str(e)) 
-                                    log_Start_End_of_tests.error(f"{cpID},{covFile},WD_RMTREE_EXCEPTION_PID,{one_test}")   
-                                    Exception_tests_list.info(one_test)   
-                                log_Start_End_of_tests.error(f"{cpID},{covFile},WD_RENAME_BACK_EXCEPTION_PID,{one_test}")   
-                                Failing_tests_list.info(one_test)
-                        log_Start_End_of_tests.warning(f"{cpID},{covFile},end,{one_test}")
-                        Failing_tests_list.info(one_test)   
-                    else:  
-                        if (working_directory_for_passed_tests_not_required):
-                            try:
-                                os.rename(workingDir_actualName,workingDir)
-                            except Exception as e:
-                                print("!!!!!!!!!!!!!!!!!!!!!!!!WD_RENAME_BACK EXCEPTION OCCURED!!!!!!!!!!!!!!!" + str(e))
-                                log_Exceptions.info(f"\n---WD_RENAME_BACK_EXCEPTION_PID {cpID}:run_one_unit_process---\n{unit}\\{test}\n" + str(e)) 
-                                try:
-                                    shutil.rmtree(workingDir_actualName)
-                                except Exception as e:
-                                    log_Exceptions.info(f"\n---WD_RMTREE_EXCEPTION_PID {cpID}:run_one_unit_process---\n{unit}\\{test}\n" + str(e)) 
-                                    log_Start_End_of_tests.error(f"{cpID},{covFile},WD_RMTREE_EXCEPTION_PID,{one_test}")   
-                                    Exception_tests_list.info(one_test)   
-                                log_Start_End_of_tests.error(f"{cpID},{covFile},WD_RENAME_BACK_EXCEPTION_PID,{one_test}")   
-                                #log_Passing_tests.info(f"{testDuration_str}____{one_test}\n")
-                                Passing_tests_list.info(one_test)
-                                
-                            
-                            #covFileDictionary[covFile] = False
-                        #log_Passing_tests.info(f"{testDuration_str}____{one_test}\n")
-                        Passing_tests_list.info(one_test)
-                        log_Start_End_of_tests.info(f"{cpID},{covFile},end,{one_test}")
+                    result_json = os.path.join(workingDir_actualName, "result.DisplayUvmTestBench.json")
+                    global failedTests
+                    try:
+                        if os.path.exists(result_json):
+                            with open(result_json, "r") as f:
+                                data = json.load(f)
+                                result = data.get("Result", {})
+                                exit_code = result.get("ToolExitCode")
+
+                                if exit_code == "0":
+                                    print(f"{test} : -----------------TEST EXECUTION SUCCESSFUL------------\n")
+                                    Passing_tests_list.info(one_test)
+                                    log_Passing_tests.info(f"{testDuration_str}____{one_test}\n")
+                                else:
+                                    print(f"{test} : !!!!!!!!!!!!!!! TEST EXECUTION FAILED !!!!!!!!!!!!!!!!!!!!\n")
+                                    Failing_tests_list.info(one_test)
+                                    log_Failing_tests.info(f"{testDuration_str}____{one_test}\n")
+                                    failedTests += 1
+                        else:
+                            print(f"{test} : !!!!!!!!!!!!!!! JSON FILE MISSING !!!!!!!!!!!!!!! \n")
+                            Failing_tests_list.info(one_test)
+                            log_Failing_tests.info(f"{testDuration_str}____{one_test}\n")
+                            failedTests += 1
+
+                    except Exception as e:
+                        print(f"{test} : !!!!!!!!!!!!!!! ERROR: {str(e)} !!!!!!!!!!!!!!")
+                        Failing_tests_list.info(one_test)
+                        log_Failing_tests.info(f"{testDuration_str}____{one_test}\n")
+                        failedTests += 1
                     #######################################################################################################
                 except Exception as e:
                     os.chdir(setupDir)
@@ -440,21 +433,6 @@ def run_one_unit_process(managedTestList, one_test, covFile, covFileDictionary, 
         covFileDictionary[covFile] = False                
         return
 
-def parse_result(test, workingDir_actualName):
-    result_json = workingDir_actualName + "\\result.DisplayUvmTestBench.json"
-    if os.path.exists(result_json):  # Use os.path.exists() for strings
-        with open(result_json, "r") as f:
-            data = json.load(f)
-            result = data.get("Result", {})
-            exit_code = result.get("ToolExitCode")
-            if exit_code == "0":
-                print(f"{test} : -----------------TEST EXECUTION SUCCESSFUL------------\n")
-            else:
-                print(f"{test} : !!!!!!!!!!!!!!! TEST EXECUTION FAILED !!!!!!!!!!!!!!!!!!!!\n")
-    else:
-        exit_code = "-1"
-        print(f"{test} : !!!!!!!!!!!!!!! JSON FILE MISSING !!!!!!!!!!!!!!! \n")
-
 def scheduler(device):
     if device != "":
         device = "_"+device
@@ -486,6 +464,10 @@ def scheduler(device):
     #os.system('mkdir BACKUP')
     #os.system('copy ' + setupDir + '\\GoldenCoverageWorkingDir\\* ' + setupDir + '\\BACKUP\\')
     WorkingDirsfolder = setupDir + "\\WorkingDirs\\"
+    if os.path.exists(WorkingDirsfolder):
+        print("Working Directory exsits")
+    else:
+        os.mkdir(WorkingDirsfolder)
     for filename in os.listdir(WorkingDirsfolder):
         file_path = os.path.join(WorkingDirsfolder, filename)
         try:
@@ -633,6 +615,7 @@ def scheduler(device):
     runDir = setupDir + "\\GoldenCoverageWorkingDir\\"
     os.chdir(runDir)
     ################################################## MERGE COVERAGE FILES ########################################################
+    print("--------------------- Merging Coverage Files ----------------------")
     while(len(CovFileNamesMasterList) != 1):
         covPairList = np.array_split(CovFileNamesMasterList, int(len(CovFileNamesMasterList)/2))
         for pair in covPairList:
@@ -673,6 +656,10 @@ def scheduler(device):
     print(
         "################################# FINAL MERGED COV FILE ####################################################")
     print("\\GoldenCoverageWorkingDir\\FinalBullseyeCoverage.cov")
+    if failedTests !=0:
+        print(f'{failedTests} out of {totalTestCount} UVM test failed')
+    else:
+        print(f'All {totalTestCount} UVM test passed successfully')
     print(
         "###########################################################################################################")
 
@@ -708,15 +695,24 @@ if __name__ == '__main__':
     
     device = ""
     if(len(sys.argv)>2):
-        device = sys.argv[2]        
-    
-    
+        device = sys.argv[2]
+
+    ################################# CLEAR DIRS & LOGS ##########################################
+    base_path = setupDir + "\\" + projectName
+
+    try:
+        shutil.rmtree(base_path + "\\WorkingDirs")
+        print("Cleanup completed")
+    except Exception as e:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!SETUP EXCEPTION OCCURED!!!!!!!!!!!!!!!" + str(e))
+
+
     #####################################################################################################
     ########## Run Script #########
     scheduler(device)
     ##############################
     #os.chdir(setupDir)
-    os.chdir(setupDir+"\\"+projectName)
+    os.chdir(base_path)
     testDuration = time.time() - startTime
     testDuration_str = time.strftime("%H hr %M min %S sec", time.gmtime(testDuration))
     print(f"The script took {testDuration_str} for {projectName} run on {date.today()}") 
